@@ -1,0 +1,24 @@
+# Build artifacts
+build/
+*.class
+*.jar
+
+# Benchmark output
+*.csv
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example

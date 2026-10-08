@@ -1,0 +1,101 @@
+services:
+  backend1:
+    build: .
+    image: lb-app
+    command: ["-cp", "/app/lb.jar", "lb.demo.DemoBackend"]
+    environment:
+      BACKEND_NAME: backend-1
+      BACKEND_PORT: "8081"
+      LATENCY_MS: "5"
+      JITTER_MS: "5"
+    restart: unless-stopped
+
+  backend2:
+    build: .
+    image: lb-app
+    command: ["-cp", "/app/lb.jar", "lb.demo.DemoBackend"]
+    environment:
+      BACKEND_NAME: backend-2
+      BACKEND_PORT: "8081"
+      LATENCY_MS: "5"
+      JITTER_MS: "5"
+    restart: unless-stopped
+
+  backend3:
+    build: .
+    image: lb-app
+    command: ["-cp", "/app/lb.jar", "lb.demo.DemoBackend"]
+    environment:
+      BACKEND_NAME: backend-3
+      BACKEND_PORT: "8081"
+      LATENCY_MS: "5"
+      JITTER_MS: "5"
+    restart: unless-stopped
+
+  backend4:
+    build: .
+    image: lb-app
+    command: ["-cp", "/app/lb.jar", "lb.demo.DemoBackend"]
+    environment:
+      BACKEND_NAME: backend-4
+      BACKEND_PORT: "8081"
+      LATENCY_MS: "5"
+      JITTER_MS: "5"
+    restart: unless-stopped
+
+  backend5:
+    build: .
+    image: lb-app
+    command: ["-cp", "/app/lb.jar", "lb.demo.DemoBackend"]
+    environment:
+      BACKEND_NAME: backend-5
+      BACKEND_PORT: "8081"
+      LATENCY_MS: "40"
+      JITTER_MS: "5"
+    restart: unless-stopped
+
+  loadbalancer:
+    build: .
+    image: lb-app
+    ports:
+      - "8080:8080"   # proxied traffic
+      - "9100:9100"   # /metrics, /health, /admin/*
+    environment:
+      LB_MODE: ${LB_MODE:-L7}                     # L7 (HTTP) or L4 (raw TCP)
+      LB_ALGORITHM: ${LB_ALGORITHM:-round_robin}  # round_robin | weighted_round_robin | least_connections | consistent_hash
+      LB_BACKENDS: "backend1:8081:3,backend2:8081:2,backend3:8081:1,backend4:8081:1,backend5:8081:1"
+      LB_RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}   # set false for pure throughput benchmarks
+      LB_RATE_LIMIT_CAPACITY: ${RATE_LIMIT_CAPACITY:-100}
+      LB_RATE_LIMIT_REFILL_PER_SEC: ${RATE_LIMIT_REFILL:-50}
+      LB_RATE_LIMIT_OVERRIDES: ${RATE_LIMIT_OVERRIDES:-}
+    depends_on: [backend1, backend2, backend3, backend4, backend5]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on: [loadbalancer]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/load-balancer.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+
+  # Run with:  docker compose --profile bench run --rm benchmark
+  benchmark:
+    image: lb-app
+    profiles: [bench]
+    command: ["-cp", "/app/lb.jar", "lb.bench.Benchmark", "--url", "http://loadbalancer:8080/", "--admin", "http://loadbalancer:9100",
+              "--requests", "5000", "--concurrency", "50", "--weights", "backend-1=3,backend-2=2,backend-3=1,backend-4=1,backend-5=1", "--csv", "/tmp/results.csv"]
+    depends_on: [loadbalancer]
